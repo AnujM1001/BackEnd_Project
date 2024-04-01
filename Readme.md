@@ -1,0 +1,1 @@
+This is a learnig project for BE with Node JS
