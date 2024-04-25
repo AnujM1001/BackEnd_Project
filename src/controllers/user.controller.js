@@ -13,25 +13,24 @@ const registerUser = asyncHAndler(async (req, res) => {
     throw new ApiError(400, "All fields are required");
   }
   // write mmore validations
-  const existedUSer = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ email }, { username: userName }],
   });
 
-  if (existedUSer) throw new ApiError(409, "User Already Exist");
+  if (existedUser) throw new ApiError(409, "User Already Exist");
 
   const avatarLocalPath = req.files?.avatar[0]?.path;
   const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
   if (!avatarLocalPath) throw new ApiError(400, "Avatar is required");
 
-  const avatar = await uploadOnCloudinatry.uploadOnCloudinatry(avatarLocalPath);
-  const coverImage =
-    await uploadOnCloudinatry.uploadOnCloudinatry(coverImageLocalPath);
-
+  const avatar = await uploadOnCloudinatry(avatarLocalPath);
+  const coverImage = await uploadOnCloudinatry(coverImageLocalPath);
+  console.log(avatar);
   if (!avatar) throw new ApiError(400, "Avatar is required");
 
   const user = await User.create({
-    fullName,
+    fullname: fullName,
     avatar: avatar.url,
     email,
     username: userName,
