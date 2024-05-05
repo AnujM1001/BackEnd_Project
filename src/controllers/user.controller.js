@@ -4,6 +4,22 @@ import { ApiResponse } from "../utils/responseHandler.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinatry } from "../utils/couldinary.service.js";
 
+const generateAccessAndRefreshToken = async function (userId) {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = await user.generateAccessToken();
+    const refershToken = await user.generateRefreshToken();
+    user.refershToken = refershToken;
+    await user.save({ validateBeforeSave: false });
+    return {
+      accessToken,
+      refershToken,
+    };
+  } catch (error) {
+    throw new ApiError(500, "something went wrong while generating tokens");
+  }
+};
+
 const registerUser = asyncHAndler(async (req, res) => {
   const { fullName, userName, email, password } = req.body;
   console.log(fullName, userName, email, password);
@@ -51,4 +67,83 @@ const registerUser = asyncHAndler(async (req, res) => {
     .json(new ApiResponse(200, savedUser, "Üser Regisstered"));
 });
 
-export { registerUser };
+const loginUser = asyncHAndler(async (req, res) => {
+  const { email, username, password } = req.body;
+
+  if (!username || !email) {
+    throw new ApiError(400, "username or password required");
+  }
+
+  const user = await User.findOne({
+    $or: [{ username }, { email }],
+  });
+
+  if (!user) {
+    throw new ApiError(404, "useruser does not exist");
+  }
+
+  const isPasswordValid = await user.isPasswordCorrect(password);
+
+  if (!isPasswordValid) {
+    throw new ApiError(404, "username or passwrod incorrect");
+  }
+
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+    user._id
+  );
+
+  const loggedInUser = User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", options)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "login success"
+      )
+    );
+});
+
+const logOutUser = asyncHAndler(async (req, res) => {
+  const userId = req.user._id;
+
+  await User.findByIdAndUpdate(
+    userId,
+    {
+      $set: {
+        refershToken: undefined,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken")
+    .clearCookie("refreshToken")
+    .json(new ApiResponse(200, {}, "Logged Out"));
+});
+
+export { registerUser, loginUser, logOutUser };
